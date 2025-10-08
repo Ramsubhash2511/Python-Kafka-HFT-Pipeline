@@ -10,10 +10,19 @@ It ingests high-volume cryptocurrency market data, processes it in real-time to 
 All components are containerized with **Docker** for easy setup and reproducibility.
 
 ---
+## Video Demo 
+
+
+https://github.com/user-attachments/assets/ff20403a-100f-4793-8920-22e8bf7cd674
+
+
+---
 
 ## ⚙️ Project Architecture
 
 The pipeline follows an **event-driven architecture**, moving data from source to destinations with minimal latency.
+
+<img width="2065" height="1188" alt="arch" src="https://github.com/user-attachments/assets/09d14209-ba66-47d2-be60-5ff9bab6718b" />
 
 ### **Data Flow**
 
@@ -29,7 +38,7 @@ The pipeline follows an **event-driven architecture**, moving data from source t
 4. **Redis (Docker)**
    Fast in-memory database where the processor writes the latest VWAP — ideal for millisecond-level access in trading strategies.
 
-5. **Snowflake Loader (`snowflake_loader.py`)**
+5. **Snowflake Loader (`snowloader.py`)**
    Performs batch uploads to a Snowflake data warehouse for historical and analytical queries.
 
 ---
@@ -169,7 +178,7 @@ python pandas_processor.py
 ### **4. (Optional) Load Data into Snowflake**
 
 ```bash
-python snowflake_loader.py
+python snowloader.py
 ```
 
 ---
@@ -194,24 +203,16 @@ Example queries in Snowflake worksheet:
 
 ```sql
 SELECT
-  DATE_TRUNC('DAY', TIMESTAMP) AS trade_day,
-  MAX(HIGH) - MIN(LOW) AS daily_price_swing,
-  SUM(VOLUME) AS total_volume
-FROM HFT_PROJECT_DB.RAW_DATA.CRYPTO_MARKET_DATA
-GROUP BY trade_day
-ORDER BY daily_price_swing DESC
-LIMIT 10;
-```
-
-#### Busiest Trading Hours (UTC)
-
-```sql
-SELECT
-  EXTRACT(HOUR FROM TIMESTAMP) AS hour_of_day,
-  AVG(VOLUME) AS average_volume
-FROM HFT_PROJECT_DB.RAW_DATA.CRYPTO_MARKET_DATA
-GROUP BY hour_of_day
-ORDER BY average_volume DESC;
+    DATE_TRUNC('DAY', TIMESTAMP) AS trade_day,
+    MAX(HIGH) - MIN(LOW) AS daily_price_swing,
+    SUM(VOLUME) AS total_volume
+FROM
+    HFT_PROJECT_DB.PUBLIC.CRYPTO_MARKET_DATA -- Corrected schema to RAW_DATA
+GROUP BY
+    trade_day
+ORDER BY
+    daily_price_swing DESC
+LIMIT 4;
 ```
 
 ---
