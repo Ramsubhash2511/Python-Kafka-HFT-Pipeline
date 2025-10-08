@@ -5,8 +5,7 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
-# --- Snowflake Configuration (read from environment only) ---
-# Ensure you have a .env or environment set with the following keys
+# --- Snowflake Configuration ---
 SNOWFLAKE_USER = os.getenv('SNOWFLAKE_USER')
 SNOWFLAKE_PASSWORD = os.getenv('SNOWFLAKE_PASSWORD')
 SNOWFLAKE_ACCOUNT = os.getenv('SNOWFLAKE_ACCOUNT')
@@ -15,8 +14,6 @@ SNOWFLAKE_WAREHOUSE = os.getenv('SNOWFLAKE_WAREHOUSE')
 SNOWFLAKE_DATABASE = os.getenv('SNOWFLAKE_DATABASE')
 SNOWFLAKE_SCHEMA = os.getenv('SNOWFLAKE_SCHEMA')
 SNOWFLAKE_TABLE = os.getenv('SNOWFLAKE_TABLE')
-
-# --- File to Load (must be set in env or .env) ---
 CSV_FILE_PATH = os.getenv('CSV_FILE_PATH')
 
 # Validate required environment variables early and fail fast
@@ -50,7 +47,7 @@ try:
 
     # --- Data Preparation ---
     print(f"Reading data from {CSV_FILE_PATH}...")
-    df = pd.read_csv(CSV_FILE_PATH)
+    df = pd.read_csv(CSV_FILE_PATH, nrows=1000)  # Limit to first 1000 rows for testing
 
     # Rename columns to match the Snowflake table exactly (UPPERCASE)
     df.rename(columns={
@@ -62,7 +59,22 @@ try:
         'volume': 'VOLUME'
     }, inplace=True)
 
-    df['TIMESTAMP'] = pd.to_datetime(df['TIMESTAMP'])
+    # --- THIS IS THE FIX for mixed timestamp formats ---
+    # This improved function correctly handles both numeric and string timestamps.
+    def robust_to_datetime(series):
+        # First, try converting numeric values (Unix timestamps in ms)
+        # Strings will become NaT (Not a Time)
+        datetimes_from_numeric = pd.to_datetime(series, errors='coerce', unit='ms')
+        
+        # Next, try converting string values
+        # Numbers will become NaT
+        datetimes_from_string = pd.to_datetime(series, errors='coerce')
+        
+        # Combine the results. Where one failed (is NaT), the other will have the correct value.
+        return datetimes_from_numeric.fillna(datetimes_from_string)
+
+    df['TIMESTAMP'] = robust_to_datetime(df['TIMESTAMP'])
+    
     print(f"Prepared {len(df)} rows for upload.")
 
     # --- Upload to Snowflake ---
@@ -73,9 +85,7 @@ try:
         table_name=SNOWFLAKE_TABLE,
         database=SNOWFLAKE_DATABASE,
         schema=SNOWFLAKE_SCHEMA,
-        auto_create_table=False,  # Table should already exist
-        overwrite=True, 
-        use_logical_type=True  # Use logical types for better type mapping
+        overwrite=True
     )
     print(f"Upload complete. Success: {success}, Rows uploaded: {nrows}")
 
@@ -85,3 +95,4 @@ finally:
     if 'conn' in locals() and conn:
         conn.close()
         print("Snowflake connection closed.")
+
