@@ -1,0 +1,5 @@
+pandas
+kafka-python
+pyspark==3.4.1
+redis
+snowflake-connector-python[pandas]
